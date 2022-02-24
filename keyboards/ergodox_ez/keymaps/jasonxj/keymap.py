@@ -25,9 +25,12 @@ CELL_VALUE_MAP = {
     'x': 'XXXXXXX',
 }
 
-# NA means the cell should contains the name of the layer. OR means the key
-# index is in ORder (counting from 0), EM means there should be no keys there
-# (i.e. EMpty). Otherwise, it should be the index of the key.
+# NA means the cell should contains the name of the layer.
+# 
+# - OR means the key index is in ORder. It will count from 0, and skip all the
+#   indices that were explicitly specified.
+# - EM means there should be no keys there (i.e. EMpty).
+# - Otherwise, it should be the index of the key.
 NA = object()
 OR = object()
 EM = object()
@@ -98,6 +101,29 @@ def to_sheet_location(row, col):
     return chr(ord('A') + col) + str(row + 1)
 
 
+def process_pattern(pattern):
+    """Process a pattern. After the processing, all the 'OR' should be replaced with an actual number"""
+    occupied_numbers = set()
+    for row in pattern:
+        for item in row:
+            if isinstance(item, int):
+                occupied_numbers.add(item)
+    result = []
+    next_number = 0
+    for row in pattern:
+        new_row = []
+        result.append(new_row)
+        for item in row:
+            if item is OR:
+                while next_number in occupied_numbers: 
+                    next_number += 1
+                new_row.append(next_number)
+                next_number += 1
+            else:
+                new_row.append(item)
+    return result
+
+
 def parse(filename):
     wb = openpyxl.load_workbook(filename)
     ws = wb.active
@@ -113,6 +139,7 @@ def parse(filename):
     print(f"layer_count = {layer_count}")
 
     layers = []
+    pattern = process_pattern(SHEET_LAYER_PATTERN)
 
     for layer_i in range(layer_count):
         start_row = SHEET_ROWS_PER_LAYER * layer_i
@@ -121,7 +148,7 @@ def parse(filename):
         key_cursor = 0
 
         def set_key(index, value):
-            assert keys[index] is None
+            assert keys[index] is None, f'keys[index] is not None. index={index}, key={keys[index]}'
             keys[index] = convert_raw_key_value(value)
         
         for row_offset in range(SHEET_ROWS_PER_LAYER):
@@ -132,8 +159,8 @@ def parse(filename):
                     return f"Cell {to_sheet_location(row, col)} ({row}, {col})"
 
                 value = get_value(row, col)
-                pattern = SHEET_LAYER_PATTERN[row_offset][col]
-                if pattern is EM:
+                pattern_item = pattern[row_offset][col]
+                if pattern_item is EM:
                     if value is not None:
                         raise ValueError(f"{debug_cell_location()} has value {repr(value)}, but it should be empty")
                     continue
@@ -141,18 +168,13 @@ def parse(filename):
                 if value is None:
                     raise ValueError(f"{debug_cell_location()} should have value")
 
-                if pattern is NA:
+                if pattern_item is NA:
                     assert name is None
                     name = value.strip()
                     continue
 
-                if pattern is OR:
-                    set_key(key_cursor, value)
-                    key_cursor += 1
-                    continue
-
-                assert isinstance(pattern, int)
-                set_key(pattern, value)
+                assert isinstance(pattern_item, int)
+                set_key(pattern_item, value)
 
         assert name is not None
         assert all(isinstance(k, str) and k for k in keys)
