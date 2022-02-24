@@ -90,3 +90,9 @@ user_song_list.h
 compile_commands.json
 .clangd/
 .cache/
+
+# For myself
+/keyboards/moonlander/keymaps/jasonxj/config-gen.h
+/keyboards/moonlander/keymaps/jasonxj/keymap-gen.c
+/keyboards/ergodox_ez/keymaps/jasonxj/config-gen.h
+/keyboards/ergodox_ez/keymaps/jasonxj/keymap-gen.c

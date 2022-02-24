@@ -20,6 +20,8 @@
 
 #include "config_common.h"
 
+#include "keymaps/jasonxj/config-gen.h"
+
 /* USB Device descriptor parameter */
 // clang-format off
 #define VENDOR_ID       0x3297

@@ -4,6 +4,8 @@ MCU = STM32F303
 # Bootloader selection
 BOOTLOADER = stm32-dfu
 
+COMBO_ENABLE = yes
+
 # Build Options
 #   change yes to no to disable
 #

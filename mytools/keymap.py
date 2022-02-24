@@ -1,23 +1,16 @@
 #!/usr/bin/env python3
+from pathlib import Path
 import re
 from dataclasses import dataclass
 
 import openpyxl
+import click
 
 
-@dataclass
-class GenCode:
-    keymap: str = ''
-    config: str = ''
+DIR = Path(__file__).resolve().parent
+ROOT_DIR = DIR.parent
+KEYMAP_NAME = 'jasonxj'
 
-    def write(self):
-        with open('./keymap-gen.c', 'w') as f:
-            f.write(self.keymap)
-        with open('./config-gen.h', 'w') as f:
-            f.write(self.config)
-
-
-KEYS_COUNT = 76
 SHEET_ROWS_PER_LAYER = 8
 SHEET_COLUMNS = 14
 CELL_VALUE_MAP = {
@@ -28,32 +21,99 @@ CELL_VALUE_MAP = {
 # NA means the cell should contains the name of the layer.
 # 
 # - OR means the key index is in ORder. It will count from 0, and skip all the
-#   indices that were explicitly specified.
+#   indices that were explicitly specified. These should be replaced by actual
+#   index after being handled by `process_pattern()`.
 # - EM means there should be no keys there (i.e. EMpty).
+# - IG means IGnore
 # - Otherwise, it should be the index of the key.
 NA = object()
 OR = object()
 EM = object()
-SHEET_LAYER_PATTERN = [
-    [NA, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM],  # Title (layer name)
-    [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
-    [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
-    [OR, OR, OR, OR, OR, OR, EM, EM, OR, OR, OR, OR, OR, OR],
-    [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
-    [OR, OR, OR, OR, OR, 64, 65, 66, 67, OR, OR, OR, OR, OR],
-    [EM, EM, EM, EM, 70, 71, 68, 69, 74, 75, EM, EM, EM, EM],
-    [EM, EM, EM, EM, EM, EM, 72, 73, EM, EM, EM, EM, EM, EM],
-]
-def _debug_check_pattern():
-    assert len(SHEET_LAYER_PATTERN) == SHEET_ROWS_PER_LAYER
-    assert all(len(r) == SHEET_COLUMNS for r in SHEET_LAYER_PATTERN)
-    keys = 0
-    for row in SHEET_LAYER_PATTERN:
-        for x in row:
-            if x is not EM and x is not NA:
-                keys += 1
-    assert keys == KEYS_COUNT
-_debug_check_pattern()
+IG = object()
+
+
+@dataclass(frozen=True)
+class Info:
+    key_count: int
+    layout_function: str
+    pattern: [[object]]
+
+    def __init__(self, key_count, layout_function, raw_pattern):
+        object.__setattr__(self, 'key_count', key_count)
+        object.__setattr__(self, 'layout_function', layout_function)
+        object.__setattr__(self, 'pattern', self.process_pattern(raw_pattern))
+        self._check()
+
+    def _check(self):
+        assert len(self.pattern) == SHEET_ROWS_PER_LAYER
+        assert all(len(r) == SHEET_COLUMNS for r in self.pattern)
+        keys = 0
+        for row in self.pattern:
+            for x in row:
+                if x not in (EM, NA, IG):
+                    keys += 1
+        assert keys == self.key_count
+
+    @classmethod
+    def process_pattern(cls, raw_pattern):
+        """Process a raw_pattern. After the processing, all the 'OR' should be replaced with an actual number"""
+        occupied_numbers = set()
+        for row in raw_pattern:
+            for item in row:
+                if isinstance(item, int):
+                    occupied_numbers.add(item)
+        pattern = []
+        next_number = 0
+        for row in raw_pattern:
+            new_row = []
+            pattern.append(new_row)
+            for item in row:
+                if item is OR:
+                    while next_number in occupied_numbers: 
+                        next_number += 1
+                    new_row.append(next_number)
+                    next_number += 1
+                else:
+                    new_row.append(item)
+        return pattern
+
+
+INFO_MAP = {
+    'ergodox_ez': Info(76, 'LAYOUT_ergodox_pretty', [
+        [NA, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM],  # Title (layer name)
+        [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, EM, EM, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, 64, 65, 66, 67, OR, OR, OR, OR, OR],
+        [EM, EM, EM, EM, 70, 71, 68, 69, 74, 75, EM, EM, EM, EM],
+        [EM, EM, EM, EM, EM, EM, 72, 73, EM, EM, EM, EM, EM, EM],
+    ]),
+    'moonlander': Info(72, 'LAYOUT_moonlander', [
+        [NA, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM],  # Title (layer name)
+        [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, EM, EM, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, 34, 35, OR, OR, OR, OR, OR, OR],
+        [OR, OR, OR, OR, OR, OR, IG, IG, OR, OR, OR, OR, OR, OR],
+        [EM, EM, EM, EM, OR, OR, IG, IG, OR, OR, EM, EM, EM, EM],
+        [EM, EM, EM, EM, EM, EM, 68, 69, EM, EM, EM, EM, EM, EM],
+    ]),
+}
+
+@dataclass
+class GenCode:
+    keyboard_name: str
+    keymap: str = ''
+    config: str = ''
+
+    def write(self):
+        # TODO: d
+        dir = ROOT_DIR / 'keyboards' / self.keyboard_name / 'keymaps' / KEYMAP_NAME
+        with (dir / 'keymap-gen.c').open('w') as f:
+            f.write(self.keymap)
+        with (dir / 'config-gen.h').open('w') as f:
+            f.write(self.config)
 
 
 @dataclass
@@ -66,6 +126,7 @@ class Layer:
 @dataclass
 class Keymap:
     layers: list[Layer]
+    info: Info
 
     def append_code(self, gen_code: GenCode):
         gen_code.keymap += f"{self._c_layers_enum()}\n\n{self._c_keymaps()}\n\n"
@@ -81,7 +142,7 @@ class Keymap:
     def _c_keymaps(self):
         s = 'const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {\n'
         for layer in self.layers:
-            s += f'  [{layer.name}] = LAYOUT_ergodox_pretty(\n';
+            s += f'  [{layer.name}] = {self.info.layout_function}(\n';
             # TODO: pretty print!
             s += f'    {layer.keys[0]}'
             for key in layer.keys[1:]:
@@ -101,30 +162,7 @@ def to_sheet_location(row, col):
     return chr(ord('A') + col) + str(row + 1)
 
 
-def process_pattern(pattern):
-    """Process a pattern. After the processing, all the 'OR' should be replaced with an actual number"""
-    occupied_numbers = set()
-    for row in pattern:
-        for item in row:
-            if isinstance(item, int):
-                occupied_numbers.add(item)
-    result = []
-    next_number = 0
-    for row in pattern:
-        new_row = []
-        result.append(new_row)
-        for item in row:
-            if item is OR:
-                while next_number in occupied_numbers: 
-                    next_number += 1
-                new_row.append(next_number)
-                next_number += 1
-            else:
-                new_row.append(item)
-    return result
-
-
-def parse(filename):
+def parse(filename: str, info: Info):
     wb = openpyxl.load_workbook(filename)
     ws = wb.active
     ws.calculate_dimension()
@@ -139,12 +177,11 @@ def parse(filename):
     print(f"layer_count = {layer_count}")
 
     layers = []
-    pattern = process_pattern(SHEET_LAYER_PATTERN)
 
     for layer_i in range(layer_count):
         start_row = SHEET_ROWS_PER_LAYER * layer_i
         name = None
-        keys = [None] * KEYS_COUNT
+        keys = [None] * info.key_count
         key_cursor = 0
 
         def set_key(index, value):
@@ -159,7 +196,11 @@ def parse(filename):
                     return f"Cell {to_sheet_location(row, col)} ({row}, {col})"
 
                 value = get_value(row, col)
-                pattern_item = pattern[row_offset][col]
+                pattern_item = info.pattern[row_offset][col]
+
+                if pattern_item is IG:
+                    continue
+
                 if pattern_item is EM:
                     if value is not None:
                         raise ValueError(f"{debug_cell_location()} has value {repr(value)}, but it should be empty")
@@ -180,7 +221,7 @@ def parse(filename):
         assert all(isinstance(k, str) and k for k in keys)
         layers.append(Layer(name, keys))
 
-    return Keymap(layers)
+    return Keymap(layers, info)
 
 
 @dataclass
@@ -243,11 +284,12 @@ def append_combos_code(gen_code: GenCode, combos: list[Combo]):
     gen_code.keymap += f'{enum_def}{progmen}{array}'
         
 
+@click.command()
+@click.argument('keyboard_name')
+def cli(keyboard_name):
+    gen_code = GenCode(keyboard_name)
 
-if __name__ == "__main__":
-    gen_code = GenCode()
-
-    keymap = parse('./keymap.xlsx')
+    keymap = parse(DIR / 'keymap.xlsx', INFO_MAP[keyboard_name])
     keymap.append_code(gen_code)
 
     append_combos_code(gen_code, COMBOS)
@@ -258,3 +300,7 @@ if __name__ == "__main__":
     print(gen_code.config)
     print(80*'-')
     print(gen_code.keymap)
+
+
+if __name__ == "__main__":
+    cli()
