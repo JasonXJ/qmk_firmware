@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
+import re
 from dataclasses import dataclass
 
 import openpyxl
+
+
+@dataclass
+class GenCode:
+    keymap: str = ''
+    config: str = ''
+
+    def write(self):
+        with open('./keymap-gen.c', 'w') as f:
+            f.write(self.keymap)
+        with open('./config-gen.h', 'w') as f:
+            f.write(self.config)
+
 
 KEYS_COUNT = 76
 SHEET_ROWS_PER_LAYER = 8
@@ -38,6 +52,7 @@ def _debug_check_pattern():
     assert keys == KEYS_COUNT
 _debug_check_pattern()
 
+
 @dataclass
 class Layer:
     name: str
@@ -49,8 +64,8 @@ class Layer:
 class Keymap:
     layers: list[Layer]
 
-    def to_c(self):
-        return f"{self._c_layers_enum()}\n\n{self._c_keymaps()}\n\n"
+    def append_code(self, gen_code: GenCode):
+        gen_code.keymap += f"{self._c_layers_enum()}\n\n{self._c_keymaps()}\n\n"
 
     def _c_layers_enum(self):
         s = 'enum layers {\n';
@@ -72,7 +87,6 @@ class Keymap:
         s += '};\n'
 
         return s
-
 
 
 def convert_raw_key_value(value):
@@ -147,11 +161,78 @@ def parse(filename):
     return Keymap(layers)
 
 
+@dataclass
+class Combo:
+    target: str
+    source: list[str]
+    name: str = None
+
+
+COMBOS = [
+    Combo('KC_TAB'   , ['KC_S', 'KC_D']),
+    Combo('KC_ESC'   , ['KC_D', 'KC_F']),
+    Combo('KC_BSPACE', ['KC_J', 'KC_K']),
+    Combo('KC_ENTER' , ['KC_K', 'KC_L']),
+    Combo('KC_MINUS' , ['KC_W', 'KC_E']),
+    Combo('LSFT(KC_MINUS)' , ['KC_E', 'KC_R'], name='CB_SHIFT_MINUS'),
+    # Combo('KC_EQUAL' , ['KC_I', 'KC_O']),
+    # Combo('LSFT(KC_EQUAL)' , ['KC_U', 'KC_I'], name='CB_SHIFT_EQUAL'),
+    Combo('KC_LBRACKET', ['KC_F', 'KC_G']),
+    Combo('LSFT(KC_LBRACKET)', ['KC_V', 'KC_B'], name='CB_SHIFT_LBRACKET'),
+    Combo('KC_RBRACKET', ['KC_H', 'KC_J']),
+    Combo('LSFT(KC_RBRACKET)', ['KC_N', 'KC_M'], name='CB_SHIFT_RBRACKET'),
+    Combo('KC_BSLASH', ['KC_M', 'KC_COMMA']),
+]
+
+_IDENTIFIER_PATTERN = re.compile(r'[A-Za-z_]\w*')
+
+def is_identifier(s):
+    return _IDENTIFIER_PATTERN.fullmatch(s) is not None
+
+
+def append_combos_code(gen_code: GenCode, combos: list[Combo]):
+    enum_def = 'enum combos {\n'
+    progmen = ''
+    array = 'combo_t key_combos[COMBO_COUNT] = {\n'
+    names = set()
+    sorted_sources = set()
+
+    def insert_and_check_unique(s, value):
+        assert value not in s
+        s.add(value)
+
+    for combo in combos:
+        name = combo.name
+        if name is None:
+            name = f'CB_{combo.target}'
+        assert is_identifier(name)
+        insert_and_check_unique(names, name)
+        insert_and_check_unique(sorted_sources, tuple(sorted(combo.source)))
+
+        enum_def += f'    {name},\n'
+        progmem_name = f'{name}_progmem'
+        progmen += f'const uint16_t PROGMEM {progmem_name}[] = {{{", ".join(combo.source)}, COMBO_END}};\n'
+        array += f'    [{name}] = COMBO({progmem_name}, {combo.target}),\n'
+
+    enum_def += '};\n'
+    array += '};\n'
+    
+    gen_code.config += f'#define COMBO_COUNT {len(combos)}\n\n'
+    gen_code.keymap += f'{enum_def}{progmen}{array}'
+        
+
+
 if __name__ == "__main__":
-    import pprint
+    gen_code = GenCode()
+
     keymap = parse('./keymap.xlsx')
-    keymap_gen_c = keymap.to_c()
+    keymap.append_code(gen_code)
+
+    append_combos_code(gen_code, COMBOS)
+
+    gen_code.write()
+
     print(80*'-')
-    print(keymap_gen_c)
-    with open('./keymap-gen.c', 'w') as f:
-        f.write(keymap_gen_c)
+    print(gen_code.config)
+    print(80*'-')
+    print(gen_code.keymap)

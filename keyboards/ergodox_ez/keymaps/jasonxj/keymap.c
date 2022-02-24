@@ -1,23 +1,8 @@
 #include QMK_KEYBOARD_H
 #include "version.h"
 
+
 #include "./keymap-gen.c"
-
-enum combos {
-    CB_ESC,
-    CB_BSPACE,
-    CB_ENTER,
-};
-const uint16_t PROGMEM esc_combos[] = {KC_D, KC_F, COMBO_END};
-const uint16_t PROGMEM bspace_combos[] = {KC_J, KC_K, COMBO_END};
-const uint16_t PROGMEM enter_combos[] = {KC_K, KC_L, COMBO_END};
-
-combo_t key_combos[COMBO_COUNT] = {
-    [CB_ESC] = COMBO(esc_combos, KC_ESC),
-    [CB_BSPACE] = COMBO(bspace_combos, KC_BSPACE),
-    [CB_ENTER] = COMBO(enter_combos, KC_ENTER),
-};
-
 
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {

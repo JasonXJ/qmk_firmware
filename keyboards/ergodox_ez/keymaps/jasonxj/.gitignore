@@ -1,1 +1,2 @@
-keymap-gen.c
+/config-gen.h
+/keymap-gen.c

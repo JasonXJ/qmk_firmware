@@ -22,6 +22,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "config_common.h"
 
+#include "keymaps/jasonxj/config-gen.h"
+
 /* USB Device descriptor parameter */
 #define VENDOR_ID       0x3297
 #define DEVICE_VER      0x0001
@@ -56,15 +58,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define TAPPING_TOGGLE  1
 
-#define COMBO_COUNT 3
+#define COMBO_TERM  15
 
 /* define if matrix has ghost */
 //#define MATRIX_HAS_GHOST
 
 #define TAPPING_TERM    200
 #define IGNORE_MOD_TAP_INTERRUPT // this makes it possible to do rolling combos (zx) with keys that convert to other keys on hold (z becomes ctrl when you hold it, and when this option isn't enabled, z rapidly followed by x actually sends Ctrl-x. That's bad.)
-
-#define COMBO_TERM  15
 
 /* Mechanical locking support. Use KC_LCAP, KC_LNUM or KC_LSCR instead in keymap */
 #define LOCKING_SUPPORT_ENABLE
@@ -212,3 +212,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NO_ACTION_MACRO
 #define NO_ACTION_FUNCTION
 //#define DEBUG_MATRIX_SCAN_RATE
+
+#define ONESHOT_TAP_TOGGLE 3
+#define ONESHOT_TIMEOUT 1000  // 1s
