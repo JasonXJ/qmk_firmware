@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import re
+import json
 from dataclasses import dataclass
 
 import openpyxl
@@ -34,11 +35,13 @@ IG = object()
 
 @dataclass(frozen=True)
 class Info:
+    name: str
     key_count: int
     layout_function: str
     pattern: [[object]]
 
-    def __init__(self, key_count, layout_function, raw_pattern):
+    def __init__(self, name, key_count, layout_function, raw_pattern):
+        object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'key_count', key_count)
         object.__setattr__(self, 'layout_function', layout_function)
         object.__setattr__(self, 'pattern', self.process_pattern(raw_pattern))
@@ -78,8 +81,8 @@ class Info:
         return pattern
 
 
-INFO_MAP = {
-    'ergodox_ez': Info(76, 'LAYOUT_ergodox_pretty', [
+INFO_LIST = [
+    Info('ergodox_ez', 76, 'LAYOUT_ergodox_pretty', [
         [NA, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM],  # Title (layer name)
         [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
         [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
@@ -89,7 +92,7 @@ INFO_MAP = {
         [EM, EM, EM, EM, 70, 71, 68, 69, 74, 75, EM, EM, EM, EM],
         [EM, EM, EM, EM, EM, EM, 72, 73, EM, EM, EM, EM, EM, EM],
     ]),
-    'moonlander': Info(72, 'LAYOUT_moonlander', [
+    Info('moonlander', 72, 'LAYOUT_moonlander', [
         [NA, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM, EM],  # Title (layer name)
         [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
         [OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR, OR],
@@ -99,7 +102,7 @@ INFO_MAP = {
         [EM, EM, EM, EM, OR, OR, IG, IG, OR, OR, EM, EM, EM, EM],
         [EM, EM, EM, EM, EM, EM, 68, 69, EM, EM, EM, EM, EM, EM],
     ]),
-}
+]
 
 @dataclass
 class GenCode:
@@ -168,7 +171,12 @@ def parse(filename: str, info: Info):
     ws.calculate_dimension()
 
     def get_value(row, col):
-        return ws.cell(row + 1, col + 1).value
+        value = ws.cell(row + 1, col + 1).value
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith('{'):
+                value = json.loads(value)[info.name]
+        return value
 
     assert ws.max_column == SHEET_COLUMNS
     assert ws.max_row % SHEET_ROWS_PER_LAYER == 0
@@ -289,7 +297,14 @@ def append_combos_code(gen_code: GenCode, combos: list[Combo]):
 def cli(keyboard_name):
     gen_code = GenCode(keyboard_name)
 
-    keymap = parse(DIR / 'keymap.xlsx', INFO_MAP[keyboard_name])
+    info = None
+    for info2 in INFO_LIST:
+        if info2.name == keyboard_name:
+            info = info2
+            break
+    assert info is not None
+
+    keymap = parse(DIR / 'keymap.xlsx', info)
     keymap.append_code(gen_code)
 
     append_combos_code(gen_code, COMBOS)
