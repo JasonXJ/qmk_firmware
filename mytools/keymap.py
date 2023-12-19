@@ -114,8 +114,10 @@ class GenCode:
         # TODO: d
         dir = ROOT_DIR / 'keyboards' / self.keyboard_name / 'keymaps' / KEYMAP_NAME
         with (dir / 'keymap-gen.c').open('w') as f:
+            print("writing to ", f.name)
             f.write(self.keymap)
         with (dir / 'config-gen.h').open('w') as f:
+            print("writing to ", f.name)
             f.write(self.config)
 
 
@@ -240,8 +242,8 @@ class Combo:
 
 
 COMBOS = [
-    Combo('KC_TAB'   , ['KC_S', 'KC_D']),
-    Combo('KC_ESC'   , ['KC_D', 'KC_F']),
+    #Combo('KC_TAB'   , ['KC_S', 'KC_D']),
+    #Combo('KC_ESC'   , ['KC_D', 'KC_F']),
     Combo('KC_BSPACE', ['KC_J', 'KC_K']),
     Combo('KC_ENTER' , ['KC_K', 'KC_L']),
     Combo('KC_MINUS' , ['KC_W', 'KC_E']),
